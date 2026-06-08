@@ -5,11 +5,12 @@ Kleine Windows-App zum Auslesen von AD-Benutzern aus Gruppen, deren Name einem M
 ## Funktionen
 
 - Gruppenmuster frei setzen, z. B. `abc*_1a*`
+- Gruppenmuster-Verlauf speichern und Eintraege entfernen
 - optional `SearchBase` und Domain Controller angeben
 - rekursive Aufloesung verschachtelter Gruppen
 - Ergebnis in einer Tabelle anzeigen
 - sichtbares Ergebnis live filtern
-- gefiltertes Ergebnis in die Zwischenablage kopieren
+- sichtbare `GroupName`-Werte in die Zwischenablage kopieren
 - gefiltertes Ergebnis als CSV exportieren
 - optional nur aktive Benutzer ausgeben
 
@@ -35,12 +36,14 @@ dotnet run --project .\AdGroupUserExporter.csproj
 
 ## Bedienung
 
-1. Gruppenmuster eintragen, z. B. `abc*_1a*`.
+1. Gruppenmuster eintragen oder aus dem Verlauf waehlen, z. B. `abc*_1a*`.
 2. Optional `SearchBase` eintragen, z. B. `OU=Groups,DC=example,DC=local`.
 3. Optional Domain Controller eintragen, z. B. `dc01.example.local`.
 4. `Suchen` klicken.
 5. Ergebnis ueber das Filterfeld einschraenken.
-6. Das sichtbare Ergebnis kopieren oder als CSV exportieren.
+6. Sichtbare `GroupName`-Werte kopieren oder das sichtbare Ergebnis als CSV exportieren.
+
+Der Gruppenmuster-Verlauf wird unter `%AppData%\AdGroupUserExporter\group-pattern-history.json` gespeichert. Der Button `Eintrag entfernen` entfernt das aktuell ausgewaehlte oder eingetragene Muster aus dem Verlauf. Ja, auch Verlaufslisten brauchen irgendwann eine Muellabfuhr.
 
 ## PowerShell-Script
 

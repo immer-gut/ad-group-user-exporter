@@ -12,12 +12,21 @@ namespace AdGroupUserExporter;
 
 public partial class MainWindow : Window
 {
+    private const int MaxPatternHistoryItems = 25;
+    private static readonly string PatternHistoryPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "AdGroupUserExporter",
+        "group-pattern-history.json");
+
     private readonly ObservableCollection<AdUserResult> _results = [];
+    private readonly ObservableCollection<string> _groupPatterns = [];
     private readonly ICollectionView _resultsView;
 
     public MainWindow()
     {
         InitializeComponent();
+        GroupPatternComboBox.ItemsSource = _groupPatterns;
+        LoadPatternHistory();
         _resultsView = CollectionViewSource.GetDefaultView(_results);
         _resultsView.Filter = FilterResult;
         ResultsGrid.ItemsSource = _resultsView;
@@ -25,7 +34,7 @@ public partial class MainWindow : Window
 
     private async void SearchButton_Click(object sender, RoutedEventArgs e)
     {
-        var groupPattern = GroupPatternTextBox.Text.Trim();
+        var groupPattern = GetCurrentGroupPattern();
         if (string.IsNullOrWhiteSpace(groupPattern))
         {
             MessageBox.Show(this, "Bitte ein Gruppenmuster angeben.", "Eingabe fehlt", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -41,6 +50,7 @@ public partial class MainWindow : Window
         try
         {
             var results = await Task.Run(() => RunPowerShellSearch(groupPattern, searchBase, server, onlyEnabled));
+            AddPatternToHistory(groupPattern);
             _results.Clear();
             foreach (var result in results)
             {
@@ -60,6 +70,109 @@ public partial class MainWindow : Window
         {
             SetBusy(false);
         }
+    }
+
+    private string GetCurrentGroupPattern()
+    {
+        return GroupPatternComboBox.Text.Trim();
+    }
+
+    private void LoadPatternHistory()
+    {
+        var patterns = ReadPatternHistory();
+        if (patterns.Count == 0)
+        {
+            patterns.Add("abc*_1a*");
+        }
+
+        _groupPatterns.Clear();
+        foreach (var pattern in patterns)
+        {
+            _groupPatterns.Add(pattern);
+        }
+
+        GroupPatternComboBox.Text = _groupPatterns.FirstOrDefault() ?? string.Empty;
+    }
+
+    private static List<string> ReadPatternHistory()
+    {
+        if (!File.Exists(PatternHistoryPath))
+        {
+            return [];
+        }
+
+        try
+        {
+            var json = File.ReadAllText(PatternHistoryPath, Encoding.UTF8);
+            return JsonSerializer.Deserialize<List<string>>(json)?
+                .Where(pattern => !string.IsNullOrWhiteSpace(pattern))
+                .Select(pattern => pattern.Trim())
+                .Distinct(StringComparer.CurrentCultureIgnoreCase)
+                .Take(MaxPatternHistoryItems)
+                .ToList() ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private void AddPatternToHistory(string groupPattern)
+    {
+        RemovePatternFromHistory(groupPattern, save: false);
+        _groupPatterns.Insert(0, groupPattern);
+
+        while (_groupPatterns.Count > MaxPatternHistoryItems)
+        {
+            _groupPatterns.RemoveAt(_groupPatterns.Count - 1);
+        }
+
+        GroupPatternComboBox.Text = groupPattern;
+        SavePatternHistory();
+    }
+
+    private void RemovePatternButton_Click(object sender, RoutedEventArgs e)
+    {
+        var groupPattern = GetCurrentGroupPattern();
+        if (string.IsNullOrWhiteSpace(groupPattern))
+        {
+            return;
+        }
+
+        if (!RemovePatternFromHistory(groupPattern, save: true))
+        {
+            StatusTextBlock.Text = "Gruppenmuster war nicht im Verlauf.";
+            return;
+        }
+
+        GroupPatternComboBox.Text = _groupPatterns.FirstOrDefault() ?? string.Empty;
+        StatusTextBlock.Text = "Gruppenmuster aus dem Verlauf entfernt.";
+    }
+
+    private bool RemovePatternFromHistory(string groupPattern, bool save)
+    {
+        var existingPattern = _groupPatterns.FirstOrDefault(pattern =>
+            string.Equals(pattern, groupPattern, StringComparison.CurrentCultureIgnoreCase));
+
+        if (existingPattern is null)
+        {
+            return false;
+        }
+
+        _groupPatterns.Remove(existingPattern);
+        if (save)
+        {
+            SavePatternHistory();
+        }
+
+        return true;
+    }
+
+    private void SavePatternHistory()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(PatternHistoryPath)!);
+        var json = JsonSerializer.Serialize(_groupPatterns.ToList(), new JsonSerializerOptions { WriteIndented = true });
+        File.WriteAllText(PatternHistoryPath, json, Encoding.UTF8);
     }
 
     private List<AdUserResult> RunPowerShellSearch(string groupPattern, string searchBase, string server, bool onlyEnabled)
@@ -161,8 +274,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        Clipboard.SetText(ToDelimitedText(filteredResults, "\t"));
-        StatusTextBlock.Text = $"{filteredResults.Count} sichtbare Benutzer in die Zwischenablage kopiert.";
+        var groupNames = GetVisibleGroupNames(filteredResults);
+        Clipboard.SetText(string.Join(Environment.NewLine, groupNames));
+        StatusTextBlock.Text = $"{groupNames.Count} sichtbare GroupName-Werte in die Zwischenablage kopiert.";
     }
 
     private void ExportButton_Click(object sender, RoutedEventArgs e)
@@ -191,6 +305,16 @@ public partial class MainWindow : Window
     private List<AdUserResult> GetFilteredResults()
     {
         return _resultsView.Cast<AdUserResult>().ToList();
+    }
+
+    private static List<string> GetVisibleGroupNames(IEnumerable<AdUserResult> results)
+    {
+        return results
+            .Select(result => result.GroupName)
+            .Where(groupName => !string.IsNullOrWhiteSpace(groupName))
+            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .OrderBy(groupName => groupName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
     }
 
     private static string ToDelimitedText(IReadOnlyCollection<AdUserResult> results, string delimiter)
