@@ -32,11 +32,15 @@ public partial class MainWindow : Window
             return;
         }
 
+        var searchBase = SearchBaseTextBox.Text.Trim();
+        var server = ServerTextBox.Text.Trim();
+        var onlyEnabled = OnlyEnabledCheckBox.IsChecked == true;
+
         SetBusy(true, "Suche laeuft...");
 
         try
         {
-            var results = await Task.Run(() => RunPowerShellSearch(groupPattern));
+            var results = await Task.Run(() => RunPowerShellSearch(groupPattern, searchBase, server, onlyEnabled));
             _results.Clear();
             foreach (var result in results)
             {
@@ -58,7 +62,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private List<AdUserResult> RunPowerShellSearch(string groupPattern)
+    private List<AdUserResult> RunPowerShellSearch(string groupPattern, string searchBase, string server, bool onlyEnabled)
     {
         var scriptPath = Path.Combine(AppContext.BaseDirectory, "Scripts", "Get-AdUsersFromGroupPattern.ps1");
         if (!File.Exists(scriptPath))
@@ -85,10 +89,10 @@ public partial class MainWindow : Window
         startInfo.ArgumentList.Add("-GroupPattern");
         startInfo.ArgumentList.Add(groupPattern);
 
-        AddOptionalArgument(startInfo, "-SearchBase", SearchBaseTextBox.Text);
-        AddOptionalArgument(startInfo, "-Server", ServerTextBox.Text);
+        AddOptionalArgument(startInfo, "-SearchBase", searchBase);
+        AddOptionalArgument(startInfo, "-Server", server);
 
-        if (OnlyEnabledCheckBox.IsChecked == true)
+        if (onlyEnabled)
         {
             startInfo.ArgumentList.Add("-OnlyEnabled");
         }
