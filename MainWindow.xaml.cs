@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace AdGroupUserExporter;
 
@@ -188,6 +189,7 @@ public partial class MainWindow : Window
 
         var theme = ReadThemeSetting();
         ApplyTheme(theme);
+        UpdateEditableComboBoxColors();
         foreach (var item in ThemeComboBox.Items.OfType<System.Windows.Controls.ComboBoxItem>())
         {
             if (string.Equals(item.Tag?.ToString(), theme, StringComparison.OrdinalIgnoreCase))
@@ -228,6 +230,7 @@ public partial class MainWindow : Window
 
         var theme = item.Tag?.ToString() == "Dark" ? "Dark" : "Light";
         ApplyTheme(theme);
+        UpdateEditableComboBoxColors();
         SaveThemeSetting(theme);
     }
 
@@ -284,6 +287,28 @@ public partial class MainWindow : Window
         Resources["TextBrush"] = BrushFromHex(text);
         Resources["SelectionBackgroundBrush"] = BrushFromHex(selectionBackground);
         Resources["SelectionTextBrush"] = BrushFromHex(selectionText);
+    }
+
+    private void UpdateEditableComboBoxColors()
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            ApplyEditableComboBoxColors(GroupPatternComboBox);
+            ApplyEditableComboBoxColors(ThemeComboBox);
+        }, DispatcherPriority.Loaded);
+    }
+
+    private void ApplyEditableComboBoxColors(System.Windows.Controls.ComboBox comboBox)
+    {
+        comboBox.ApplyTemplate();
+
+        if (comboBox.Template.FindName("PART_EditableTextBox", comboBox) is System.Windows.Controls.TextBox editableTextBox)
+        {
+            editableTextBox.Background = (Brush)Resources["InputBackgroundBrush"];
+            editableTextBox.Foreground = (Brush)Resources["TextBrush"];
+            editableTextBox.BorderBrush = (Brush)Resources["BorderBrush"];
+            editableTextBox.CaretBrush = (Brush)Resources["TextBrush"];
+        }
     }
 
     private static SolidColorBrush BrushFromHex(string hex)
