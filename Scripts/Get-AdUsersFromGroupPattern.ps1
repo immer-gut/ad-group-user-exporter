@@ -56,8 +56,8 @@ function Resolve-GroupMembers {
         [Parameter(Mandatory = $true)]$Group,
         [Parameter(Mandatory = $true)][string[]]$Path,
         [Parameter(Mandatory = $true)][hashtable]$VisitedGroups,
-        [Parameter(Mandatory = $true)][System.Collections.Generic.List[object]]$Results,
-        [Parameter(Mandatory = $true)][hashtable]$SeenUsers
+        [System.Collections.Generic.List[object]]$Results,
+        [hashtable]$SeenUsers
     )
 
     if ($VisitedGroups.ContainsKey($Group.DistinguishedName)) {
@@ -134,4 +134,8 @@ foreach ($group in $groups) {
     Resolve-GroupMembers -Group $group -Path @($group.Name) -VisitedGroups @{} -Results $results -SeenUsers $seenUsers
 }
 
-$results | ConvertTo-Json -Depth 6
+if ($results.Count -eq 0) {
+    '[]'
+} else {
+    $results | ConvertTo-Json -Depth 6
+}
