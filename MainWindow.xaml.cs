@@ -6,6 +6,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -32,6 +33,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Loaded += (_, _) => UpdateComboBoxColors();
         GroupPatternComboBox.ItemsSource = _groupPatterns;
         LoadPatternHistory();
         LoadThemeSetting();
@@ -189,7 +191,7 @@ public partial class MainWindow : Window
 
         var theme = ReadThemeSetting();
         ApplyTheme(theme);
-        UpdateEditableComboBoxColors();
+        UpdateComboBoxColors();
         foreach (var item in ThemeComboBox.Items.OfType<System.Windows.Controls.ComboBoxItem>())
         {
             if (string.Equals(item.Tag?.ToString(), theme, StringComparison.OrdinalIgnoreCase))
@@ -230,7 +232,7 @@ public partial class MainWindow : Window
 
         var theme = item.Tag?.ToString() == "Dark" ? "Dark" : "Light";
         ApplyTheme(theme);
-        UpdateEditableComboBoxColors();
+        UpdateComboBoxColors();
         SaveThemeSetting(theme);
     }
 
@@ -319,18 +321,21 @@ public partial class MainWindow : Window
         Resources[SystemColors.HighlightTextBrushKey] = selectionTextBrush;
     }
 
-    private void UpdateEditableComboBoxColors()
+    private void UpdateComboBoxColors()
     {
         Dispatcher.BeginInvoke(() =>
         {
-            ApplyEditableComboBoxColors(GroupPatternComboBox);
-            ApplyEditableComboBoxColors(ThemeComboBox);
+            ApplyComboBoxColors(GroupPatternComboBox);
+            ApplyComboBoxColors(ThemeComboBox);
         }, DispatcherPriority.Loaded);
     }
 
-    private void ApplyEditableComboBoxColors(System.Windows.Controls.ComboBox comboBox)
+    private void ApplyComboBoxColors(System.Windows.Controls.ComboBox comboBox)
     {
         comboBox.ApplyTemplate();
+        comboBox.Background = (Brush)Resources["InputBackgroundBrush"];
+        comboBox.Foreground = (Brush)Resources["TextBrush"];
+        comboBox.BorderBrush = (Brush)Resources["BorderBrush"];
 
         if (comboBox.Template.FindName("PART_EditableTextBox", comboBox) is System.Windows.Controls.TextBox editableTextBox)
         {
@@ -338,6 +343,45 @@ public partial class MainWindow : Window
             editableTextBox.Foreground = (Brush)Resources["TextBrush"];
             editableTextBox.BorderBrush = (Brush)Resources["BorderBrush"];
             editableTextBox.CaretBrush = (Brush)Resources["TextBrush"];
+        }
+
+        ApplyComboBoxVisualTreeColors(comboBox);
+    }
+
+    private void ApplyComboBoxVisualTreeColors(DependencyObject parent)
+    {
+        var inputBackground = (Brush)Resources["InputBackgroundBrush"];
+        var buttonBackground = (Brush)Resources["ButtonBackgroundBrush"];
+        var border = (Brush)Resources["BorderBrush"];
+        var text = (Brush)Resources["TextBrush"];
+
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+
+            switch (child)
+            {
+                case System.Windows.Controls.Border borderElement:
+                    borderElement.Background = inputBackground;
+                    borderElement.BorderBrush = border;
+                    break;
+                case ToggleButton toggleButton:
+                    toggleButton.Background = buttonBackground;
+                    toggleButton.Foreground = text;
+                    toggleButton.BorderBrush = border;
+                    break;
+                case System.Windows.Controls.TextBox textBox:
+                    textBox.Background = inputBackground;
+                    textBox.Foreground = text;
+                    textBox.BorderBrush = border;
+                    textBox.CaretBrush = text;
+                    break;
+                case System.Windows.Controls.TextBlock textBlock:
+                    textBlock.Foreground = text;
+                    break;
+            }
+
+            ApplyComboBoxVisualTreeColors(child);
         }
     }
 
