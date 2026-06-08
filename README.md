@@ -6,6 +6,7 @@ Kleine Windows-App zum Auslesen von AD-Benutzern aus Gruppen, deren Name einem M
 
 - Gruppenmuster frei setzen, z. B. `abc*_1a*`
 - Gruppenmuster-Verlauf speichern und Eintraege entfernen
+- Hell-/Dunkel-Theme umschalten und merken
 - optional `SearchBase` und Domain Controller angeben
 - rekursive Aufloesung verschachtelter Gruppen
 - Ergebnis in einer Tabelle anzeigen
@@ -39,11 +40,14 @@ dotnet run --project .\AdGroupUserExporter.csproj
 1. Gruppenmuster eintragen oder aus dem Verlauf waehlen, z. B. `abc*_1a*`.
 2. Optional `SearchBase` eintragen, z. B. `OU=Groups,DC=example,DC=local`.
 3. Optional Domain Controller eintragen, z. B. `dc01.example.local`.
-4. `Suchen` klicken.
-5. Ergebnis ueber das Filterfeld einschraenken.
-6. Sichtbare `GroupName`-Werte kopieren oder das sichtbare Ergebnis als CSV exportieren.
+4. Optional Theme auf `Hell` oder `Dunkel` setzen.
+5. `Suchen` klicken.
+6. Ergebnis ueber das Filterfeld einschraenken.
+7. Sichtbare `GroupName`-Werte kopieren oder das sichtbare Ergebnis als CSV exportieren.
 
 Der Gruppenmuster-Verlauf wird unter `%AppData%\AdGroupUserExporter\group-pattern-history.json` gespeichert. Der Button `Eintrag entfernen` entfernt das aktuell ausgewaehlte oder eingetragene Muster aus dem Verlauf. Ja, auch Verlaufslisten brauchen irgendwann eine Muellabfuhr.
+
+Die Theme-Auswahl wird unter `%AppData%\AdGroupUserExporter\settings.json` gespeichert.
 
 ## PowerShell-Script
 

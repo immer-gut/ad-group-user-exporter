@@ -7,16 +7,22 @@ using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Data;
+using System.Windows.Media;
 
 namespace AdGroupUserExporter;
 
 public partial class MainWindow : Window
 {
     private const int MaxPatternHistoryItems = 25;
+    private bool _isInitializingTheme;
     private static readonly string PatternHistoryPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "AdGroupUserExporter",
         "group-pattern-history.json");
+    private static readonly string SettingsPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "AdGroupUserExporter",
+        "settings.json");
 
     private readonly ObservableCollection<AdUserResult> _results = [];
     private readonly ObservableCollection<string> _groupPatterns = [];
@@ -27,6 +33,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         GroupPatternComboBox.ItemsSource = _groupPatterns;
         LoadPatternHistory();
+        LoadThemeSetting();
         _resultsView = CollectionViewSource.GetDefaultView(_results);
         _resultsView.Filter = FilterResult;
         ResultsGrid.ItemsSource = _resultsView;
@@ -173,6 +180,124 @@ public partial class MainWindow : Window
         Directory.CreateDirectory(Path.GetDirectoryName(PatternHistoryPath)!);
         var json = JsonSerializer.Serialize(_groupPatterns.ToList(), new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(PatternHistoryPath, json, Encoding.UTF8);
+    }
+
+    private void LoadThemeSetting()
+    {
+        _isInitializingTheme = true;
+
+        var theme = ReadThemeSetting();
+        ApplyTheme(theme);
+        foreach (var item in ThemeComboBox.Items.OfType<System.Windows.Controls.ComboBoxItem>())
+        {
+            if (string.Equals(item.Tag?.ToString(), theme, StringComparison.OrdinalIgnoreCase))
+            {
+                ThemeComboBox.SelectedItem = item;
+                break;
+            }
+        }
+
+        _isInitializingTheme = false;
+    }
+
+    private static string ReadThemeSetting()
+    {
+        if (!File.Exists(SettingsPath))
+        {
+            return "Light";
+        }
+
+        try
+        {
+            var json = File.ReadAllText(SettingsPath, Encoding.UTF8);
+            var settings = JsonSerializer.Deserialize<AppSettings>(json);
+            return settings?.Theme is "Dark" ? "Dark" : "Light";
+        }
+        catch
+        {
+            return "Light";
+        }
+    }
+
+    private void ThemeComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (_isInitializingTheme || ThemeComboBox.SelectedItem is not System.Windows.Controls.ComboBoxItem item)
+        {
+            return;
+        }
+
+        var theme = item.Tag?.ToString() == "Dark" ? "Dark" : "Light";
+        ApplyTheme(theme);
+        SaveThemeSetting(theme);
+    }
+
+    private void ApplyTheme(string theme)
+    {
+        if (theme == "Dark")
+        {
+            SetThemeResources(
+                windowBackground: "#1F2328",
+                panelBackground: "#252A31",
+                inputBackground: "#15191F",
+                alternateRowBackground: "#20262D",
+                headerBackground: "#30363D",
+                buttonBackground: "#30363D",
+                border: "#57606A",
+                text: "#E6EDF3",
+                selectionBackground: "#1F6FEB",
+                selectionText: "#FFFFFF");
+            return;
+        }
+
+        SetThemeResources(
+            windowBackground: "#F6F8FA",
+            panelBackground: "#FFFFFF",
+            inputBackground: "#FFFFFF",
+            alternateRowBackground: "#F6F8FA",
+            headerBackground: "#F6F8FA",
+            buttonBackground: "#F6F8FA",
+            border: "#D0D7DE",
+            text: "#24292F",
+            selectionBackground: "#0969DA",
+            selectionText: "#FFFFFF");
+    }
+
+    private void SetThemeResources(
+        string windowBackground,
+        string panelBackground,
+        string inputBackground,
+        string alternateRowBackground,
+        string headerBackground,
+        string buttonBackground,
+        string border,
+        string text,
+        string selectionBackground,
+        string selectionText)
+    {
+        Resources["WindowBackgroundBrush"] = BrushFromHex(windowBackground);
+        Resources["PanelBackgroundBrush"] = BrushFromHex(panelBackground);
+        Resources["InputBackgroundBrush"] = BrushFromHex(inputBackground);
+        Resources["AlternateRowBackgroundBrush"] = BrushFromHex(alternateRowBackground);
+        Resources["HeaderBackgroundBrush"] = BrushFromHex(headerBackground);
+        Resources["ButtonBackgroundBrush"] = BrushFromHex(buttonBackground);
+        Resources["BorderBrush"] = BrushFromHex(border);
+        Resources["TextBrush"] = BrushFromHex(text);
+        Resources["SelectionBackgroundBrush"] = BrushFromHex(selectionBackground);
+        Resources["SelectionTextBrush"] = BrushFromHex(selectionText);
+    }
+
+    private static SolidColorBrush BrushFromHex(string hex)
+    {
+        var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+        brush.Freeze();
+        return brush;
+    }
+
+    private static void SaveThemeSetting(string theme)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+        var json = JsonSerializer.Serialize(new AppSettings { Theme = theme }, new JsonSerializerOptions { WriteIndented = true });
+        File.WriteAllText(SettingsPath, json, Encoding.UTF8);
     }
 
     private List<AdUserResult> RunPowerShellSearch(string groupPattern, string searchBase, string server, bool onlyEnabled)
@@ -355,5 +480,10 @@ public partial class MainWindow : Window
         var hasVisibleRows = GetFilteredResults().Count > 0;
         CopyButton.IsEnabled = hasVisibleRows;
         ExportButton.IsEnabled = hasVisibleRows;
+    }
+
+    private sealed class AppSettings
+    {
+        public string Theme { get; set; } = "Light";
     }
 }
