@@ -245,8 +245,10 @@ public partial class MainWindow : Window
                 alternateRowBackground: "#20262D",
                 headerBackground: "#30363D",
                 buttonBackground: "#30363D",
+                disabledBackground: "#252A31",
                 border: "#57606A",
                 text: "#E6EDF3",
+                mutedText: "#8B949E",
                 selectionBackground: "#1F6FEB",
                 selectionText: "#FFFFFF");
             return;
@@ -259,8 +261,10 @@ public partial class MainWindow : Window
             alternateRowBackground: "#F6F8FA",
             headerBackground: "#F6F8FA",
             buttonBackground: "#F6F8FA",
+            disabledBackground: "#F6F8FA",
             border: "#D0D7DE",
             text: "#24292F",
+            mutedText: "#6E7781",
             selectionBackground: "#0969DA",
             selectionText: "#FFFFFF");
     }
@@ -272,21 +276,47 @@ public partial class MainWindow : Window
         string alternateRowBackground,
         string headerBackground,
         string buttonBackground,
+        string disabledBackground,
         string border,
         string text,
+        string mutedText,
         string selectionBackground,
         string selectionText)
     {
-        Resources["WindowBackgroundBrush"] = BrushFromHex(windowBackground);
-        Resources["PanelBackgroundBrush"] = BrushFromHex(panelBackground);
-        Resources["InputBackgroundBrush"] = BrushFromHex(inputBackground);
-        Resources["AlternateRowBackgroundBrush"] = BrushFromHex(alternateRowBackground);
-        Resources["HeaderBackgroundBrush"] = BrushFromHex(headerBackground);
-        Resources["ButtonBackgroundBrush"] = BrushFromHex(buttonBackground);
-        Resources["BorderBrush"] = BrushFromHex(border);
-        Resources["TextBrush"] = BrushFromHex(text);
-        Resources["SelectionBackgroundBrush"] = BrushFromHex(selectionBackground);
-        Resources["SelectionTextBrush"] = BrushFromHex(selectionText);
+        var windowBackgroundBrush = BrushFromHex(windowBackground);
+        var panelBackgroundBrush = BrushFromHex(panelBackground);
+        var inputBackgroundBrush = BrushFromHex(inputBackground);
+        var alternateRowBackgroundBrush = BrushFromHex(alternateRowBackground);
+        var headerBackgroundBrush = BrushFromHex(headerBackground);
+        var buttonBackgroundBrush = BrushFromHex(buttonBackground);
+        var disabledBackgroundBrush = BrushFromHex(disabledBackground);
+        var borderBrush = BrushFromHex(border);
+        var textBrush = BrushFromHex(text);
+        var mutedTextBrush = BrushFromHex(mutedText);
+        var selectionBackgroundBrush = BrushFromHex(selectionBackground);
+        var selectionTextBrush = BrushFromHex(selectionText);
+
+        Resources["WindowBackgroundBrush"] = windowBackgroundBrush;
+        Resources["PanelBackgroundBrush"] = panelBackgroundBrush;
+        Resources["InputBackgroundBrush"] = inputBackgroundBrush;
+        Resources["AlternateRowBackgroundBrush"] = alternateRowBackgroundBrush;
+        Resources["HeaderBackgroundBrush"] = headerBackgroundBrush;
+        Resources["ButtonBackgroundBrush"] = buttonBackgroundBrush;
+        Resources["DisabledBackgroundBrush"] = disabledBackgroundBrush;
+        Resources["BorderBrush"] = borderBrush;
+        Resources["TextBrush"] = textBrush;
+        Resources["MutedTextBrush"] = mutedTextBrush;
+        Resources["SelectionBackgroundBrush"] = selectionBackgroundBrush;
+        Resources["SelectionTextBrush"] = selectionTextBrush;
+
+        Resources[SystemColors.WindowBrushKey] = inputBackgroundBrush;
+        Resources[SystemColors.ControlBrushKey] = buttonBackgroundBrush;
+        Resources[SystemColors.ControlDarkBrushKey] = borderBrush;
+        Resources[SystemColors.ControlLightBrushKey] = panelBackgroundBrush;
+        Resources[SystemColors.ControlTextBrushKey] = textBrush;
+        Resources[SystemColors.GrayTextBrushKey] = mutedTextBrush;
+        Resources[SystemColors.HighlightBrushKey] = selectionBackgroundBrush;
+        Resources[SystemColors.HighlightTextBrushKey] = selectionTextBrush;
     }
 
     private void UpdateEditableComboBoxColors()
