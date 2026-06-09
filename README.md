@@ -23,6 +23,12 @@ Kleine Windows-App zum Auslesen von AD-Benutzern aus Gruppen, deren Name einem M
 - ActiveDirectory PowerShell-Modul, z. B. RSAT Active Directory Tools
 - Leserechte auf die relevanten AD-Gruppen und Benutzer
 
+RSAT Active Directory Tools installieren:
+
+```powershell
+Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0
+```
+
 ## Start in Visual Studio
 
 1. Repository klonen.
