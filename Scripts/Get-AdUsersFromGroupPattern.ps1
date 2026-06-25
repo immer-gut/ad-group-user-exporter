@@ -1,12 +1,15 @@
 param(
-    [Parameter(Mandatory = $true)]
     [string]$GroupPattern,
 
     [string]$SearchBase,
 
     [string]$Server,
 
-    [switch]$OnlyEnabled
+    [switch]$OnlyEnabled,
+
+    [string]$CompareUserA,
+
+    [string]$CompareUserB
 )
 
 $ErrorActionPreference = 'Stop'
@@ -23,6 +26,24 @@ function ConvertTo-LdapFilterValue {
             '(' { [void]$builder.Append('\28') }
             ')' { [void]$builder.Append('\29') }
             '\' { [void]$builder.Append('\5c') }
+            ([char]0) { [void]$builder.Append('\00') }
+            default { [void]$builder.Append($character) }
+        }
+    }
+
+    $builder.ToString()
+}
+
+function ConvertTo-LdapLiteralFilterValue {
+    param([Parameter(Mandatory = $true)][string]$Value)
+
+    $builder = [System.Text.StringBuilder]::new()
+    foreach ($character in $Value.ToCharArray()) {
+        switch ($character) {
+            '(' { [void]$builder.Append('\28') }
+            ')' { [void]$builder.Append('\29') }
+            '\' { [void]$builder.Append('\5c') }
+            '*' { [void]$builder.Append('\2a') }
             ([char]0) { [void]$builder.Append('\00') }
             default { [void]$builder.Append($character) }
         }
@@ -114,6 +135,122 @@ function Resolve-GroupMembers {
     }
 }
 
+function Get-ComparisonUser {
+    param([Parameter(Mandatory = $true)][string]$Identity)
+
+    $userParameters = New-AdCommandParameters -Identity $Identity -Properties @(
+        'DistinguishedName',
+        'SamAccountName',
+        'Name',
+        'PrimaryGroupID'
+    )
+    Get-ADUser @userParameters
+}
+
+function Get-UserGroups {
+    param([Parameter(Mandatory = $true)]$User)
+
+    $escapedDn = ConvertTo-LdapLiteralFilterValue -Value $User.DistinguishedName
+    $groupParameters = @{
+        LDAPFilter = "(member:1.2.840.113556.1.4.1941:=$escapedDn)"
+        Properties = @('DistinguishedName', 'Name')
+    }
+    if ($SearchBase) {
+        $groupParameters.SearchBase = $SearchBase
+    }
+    if ($Server) {
+        $groupParameters.Server = $Server
+    }
+
+    $groups = @(Get-ADGroup @groupParameters)
+
+    if ($User.PrimaryGroupID) {
+        try {
+            $primaryGroupParameters = @{
+                LDAPFilter = "(primaryGroupToken=$($User.PrimaryGroupID))"
+                Properties = @('DistinguishedName', 'Name')
+            }
+            if ($SearchBase) {
+                $primaryGroupParameters.SearchBase = $SearchBase
+            }
+            if ($Server) {
+                $primaryGroupParameters.Server = $Server
+            }
+
+            $groups += @(Get-ADGroup @primaryGroupParameters)
+        } catch { }
+    }
+
+    $byDn = @{}
+    foreach ($group in $groups) {
+        if (-not $byDn.ContainsKey($group.DistinguishedName)) {
+            $byDn[$group.DistinguishedName] = $group
+        }
+    }
+
+    $byDn.Values | Sort-Object Name
+}
+
+function Compare-UserGroups {
+    param(
+        [Parameter(Mandatory = $true)][string]$UserAIdentity,
+        [Parameter(Mandatory = $true)][string]$UserBIdentity
+    )
+
+    $userA = Get-ComparisonUser -Identity $UserAIdentity
+    $userB = Get-ComparisonUser -Identity $UserBIdentity
+    $userALabel = if ($userA.SamAccountName) { [string]$userA.SamAccountName } else { [string]$UserAIdentity }
+    $userBLabel = if ($userB.SamAccountName) { [string]$userB.SamAccountName } else { [string]$UserBIdentity }
+
+    $groupsA = Get-UserGroups -User $userA
+    $groupsB = Get-UserGroups -User $userB
+    $mapA = @{}
+    $mapB = @{}
+    $allDns = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+
+    foreach ($group in $groupsA) {
+        $mapA[$group.DistinguishedName] = $group
+        [void]$allDns.Add($group.DistinguishedName)
+    }
+    foreach ($group in $groupsB) {
+        $mapB[$group.DistinguishedName] = $group
+        [void]$allDns.Add($group.DistinguishedName)
+    }
+
+    foreach ($dn in $allDns) {
+        $inA = $mapA.ContainsKey($dn)
+        $inB = $mapB.ContainsKey($dn)
+        $group = if ($inA) { $mapA[$dn] } else { $mapB[$dn] }
+        $status = if ($inA -and $inB) { 'Beide' } elseif ($inA) { "Nur $userALabel" } else { "Nur $userBLabel" }
+
+        [pscustomobject]@{
+            Status = $status
+            GroupName = [string]$group.Name
+            UserA = if ($inA) { 'Ja' } else { 'Nein' }
+            UserB = if ($inB) { 'Ja' } else { 'Nein' }
+            DistinguishedName = [string]$group.DistinguishedName
+        }
+    }
+}
+
+if ($CompareUserA -or $CompareUserB) {
+    if ([string]::IsNullOrWhiteSpace($CompareUserA) -or [string]::IsNullOrWhiteSpace($CompareUserB)) {
+        throw 'Fuer den User-Vergleich muessen -CompareUserA und -CompareUserB angegeben werden.'
+    }
+
+    $comparisonResults = @(Compare-UserGroups -UserAIdentity $CompareUserA -UserBIdentity $CompareUserB | Sort-Object Status, GroupName)
+    if ($comparisonResults.Count -eq 0) {
+        '[]'
+    } else {
+        ConvertTo-Json -InputObject $comparisonResults -Depth 6
+    }
+    return
+}
+
+if ([string]::IsNullOrWhiteSpace($GroupPattern)) {
+    throw 'Bitte -GroupPattern angeben.'
+}
+
 $ldapPattern = ConvertTo-LdapFilterValue -Value $GroupPattern
 $groupParameters = @{
     LDAPFilter = "(name=$ldapPattern)"
@@ -137,5 +274,5 @@ foreach ($group in $groups) {
 if ($results.Count -eq 0) {
     '[]'
 } else {
-    $results | ConvertTo-Json -Depth 6
+    ConvertTo-Json -InputObject $results -Depth 6
 }

@@ -14,6 +14,7 @@ Kleine Windows-App zum Auslesen von AD-Benutzern aus Gruppen, deren Name einem M
 - sichtbare `GroupName`-Werte in die Zwischenablage kopieren
 - gefiltertes Ergebnis als CSV exportieren
 - optional nur aktive Benutzer ausgeben
+- zwei Benutzer vergleichen und gemeinsame bzw. unterschiedliche Gruppen anzeigen
 
 ## Voraussetzungen
 
@@ -50,6 +51,7 @@ dotnet run --project .\AdGroupUserExporter.csproj
 5. `Suchen` klicken.
 6. Ergebnis ueber das Filterfeld einschraenken.
 7. Sichtbare `GroupName`-Werte kopieren oder das sichtbare Ergebnis als CSV exportieren.
+8. Fuer einen Gruppenvergleich zwei Benutzer in `User 1` und `User 2` eintragen und `User vergleichen` klicken.
 
 Der Gruppenmuster-Verlauf wird unter `%AppData%\AdGroupUserExporter\group-pattern-history.json` gespeichert. Der Button `Eintrag entfernen` entfernt das aktuell ausgewaehlte oder eingetragene Muster aus dem Verlauf. Ja, auch Verlaufslisten brauchen irgendwann eine Muellabfuhr.
 
@@ -80,6 +82,14 @@ Mit SearchBase:
   -OnlyEnabled
 ```
 
+User-Gruppen direkt vergleichen:
+
+```powershell
+.\Scripts\Get-AdUsersFromGroupPattern.ps1 `
+  -CompareUserA "user1" `
+  -CompareUserB "user2"
+```
+
 ## Build
 
 ```powershell
@@ -102,6 +112,14 @@ dotnet publish -c Release -r win-x64 --self-contained false
 - `Enabled`
 - `Department`
 - `Title`
+- `DistinguishedName`
+
+## Vergleichs-Spalten
+
+- `Status`
+- `GroupName`
+- `UserA`
+- `UserB`
 - `DistinguishedName`
 
 ## Hinweise

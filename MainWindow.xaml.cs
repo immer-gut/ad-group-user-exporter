@@ -17,6 +17,7 @@ public partial class MainWindow : Window
 {
     private const int MaxPatternHistoryItems = 25;
     private bool _isInitializingTheme;
+    private ResultMode _resultMode = ResultMode.UserSearch;
     private static readonly string PatternHistoryPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "AdGroupUserExporter",
@@ -27,8 +28,10 @@ public partial class MainWindow : Window
         "settings.json");
 
     private readonly ObservableCollection<AdUserResult> _results = [];
+    private readonly ObservableCollection<GroupComparisonResult> _comparisonResults = [];
     private readonly ObservableCollection<string> _groupPatterns = [];
     private readonly ICollectionView _resultsView;
+    private readonly ICollectionView _comparisonResultsView;
 
     public MainWindow()
     {
@@ -40,6 +43,9 @@ public partial class MainWindow : Window
         _resultsView = CollectionViewSource.GetDefaultView(_results);
         _resultsView.Filter = FilterResult;
         ResultsGrid.ItemsSource = _resultsView;
+        _comparisonResultsView = CollectionViewSource.GetDefaultView(_comparisonResults);
+        _comparisonResultsView.Filter = FilterComparisonResult;
+        ComparisonGrid.ItemsSource = _comparisonResultsView;
     }
 
     private async void SearchButton_Click(object sender, RoutedEventArgs e)
@@ -67,6 +73,7 @@ public partial class MainWindow : Window
                 _results.Add(result);
             }
 
+            SetResultMode(ResultMode.UserSearch);
             _resultsView.Refresh();
             UpdateActionButtons();
             StatusTextBlock.Text = $"{_results.Count} Benutzer geladen, {GetFilteredResults().Count} sichtbar.";
@@ -75,6 +82,48 @@ public partial class MainWindow : Window
         {
             MessageBox.Show(this, ex.Message, "AD-Abfrage fehlgeschlagen", MessageBoxButton.OK, MessageBoxImage.Error);
             StatusTextBlock.Text = "Fehler bei der AD-Abfrage.";
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private async void CompareUsersButton_Click(object sender, RoutedEventArgs e)
+    {
+        var userA = CompareUserATextBox.Text.Trim();
+        var userB = CompareUserBTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(userA) || string.IsNullOrWhiteSpace(userB))
+        {
+            MessageBox.Show(this, "Bitte beide Benutzer angeben.", "Eingabe fehlt", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var searchBase = SearchBaseTextBox.Text.Trim();
+        var server = ServerTextBox.Text.Trim();
+
+        SetBusy(true, "User-Gruppen werden verglichen...");
+
+        try
+        {
+            var results = await Task.Run(() => RunPowerShellGroupComparison(userA, userB, searchBase, server));
+            _comparisonResults.Clear();
+            foreach (var result in results)
+            {
+                _comparisonResults.Add(result);
+            }
+
+            SetResultMode(ResultMode.GroupComparison);
+            _comparisonResultsView.Refresh();
+            UpdateActionButtons();
+            var visibleCount = GetFilteredComparisonResults().Count;
+            var sharedCount = _comparisonResults.Count(result => result.Status == "Beide");
+            StatusTextBlock.Text = $"{_comparisonResults.Count} Gruppen verglichen, {sharedCount} gemeinsam, {visibleCount} sichtbar.";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "User-Vergleich fehlgeschlagen", MessageBoxButton.OK, MessageBoxImage.Error);
+            StatusTextBlock.Text = "Fehler beim User-Vergleich.";
         }
         finally
         {
@@ -401,6 +450,37 @@ public partial class MainWindow : Window
 
     private List<AdUserResult> RunPowerShellSearch(string groupPattern, string searchBase, string server, bool onlyEnabled)
     {
+        return RunPowerShell<List<AdUserResult>>(startInfo =>
+        {
+            startInfo.ArgumentList.Add("-GroupPattern");
+            startInfo.ArgumentList.Add(groupPattern);
+
+            AddOptionalArgument(startInfo, "-SearchBase", searchBase);
+            AddOptionalArgument(startInfo, "-Server", server);
+
+            if (onlyEnabled)
+            {
+                startInfo.ArgumentList.Add("-OnlyEnabled");
+            }
+        }) ?? [];
+    }
+
+    private List<GroupComparisonResult> RunPowerShellGroupComparison(string userA, string userB, string searchBase, string server)
+    {
+        return RunPowerShell<List<GroupComparisonResult>>(startInfo =>
+        {
+            startInfo.ArgumentList.Add("-CompareUserA");
+            startInfo.ArgumentList.Add(userA);
+            startInfo.ArgumentList.Add("-CompareUserB");
+            startInfo.ArgumentList.Add(userB);
+
+            AddOptionalArgument(startInfo, "-SearchBase", searchBase);
+            AddOptionalArgument(startInfo, "-Server", server);
+        }) ?? [];
+    }
+
+    private T? RunPowerShell<T>(Action<ProcessStartInfo> addArguments)
+    {
         var scriptPath = Path.Combine(AppContext.BaseDirectory, "Scripts", "Get-AdUsersFromGroupPattern.ps1");
         if (!File.Exists(scriptPath))
         {
@@ -423,16 +503,8 @@ public partial class MainWindow : Window
         startInfo.ArgumentList.Add("Bypass");
         startInfo.ArgumentList.Add("-File");
         startInfo.ArgumentList.Add(scriptPath);
-        startInfo.ArgumentList.Add("-GroupPattern");
-        startInfo.ArgumentList.Add(groupPattern);
 
-        AddOptionalArgument(startInfo, "-SearchBase", searchBase);
-        AddOptionalArgument(startInfo, "-Server", server);
-
-        if (onlyEnabled)
-        {
-            startInfo.ArgumentList.Add("-OnlyEnabled");
-        }
+        addArguments(startInfo);
 
         using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("PowerShell konnte nicht gestartet werden.");
         var output = process.StandardOutput.ReadToEnd();
@@ -446,13 +518,13 @@ public partial class MainWindow : Window
 
         if (string.IsNullOrWhiteSpace(output))
         {
-            return [];
+            return default;
         }
 
-        return JsonSerializer.Deserialize<List<AdUserResult>>(output, new JsonSerializerOptions
+        return JsonSerializer.Deserialize<T>(output, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
-        }) ?? [];
+        });
     }
 
     private static string FindPowerShellExecutable()
@@ -474,9 +546,18 @@ public partial class MainWindow : Window
 
     private void FilterTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
     {
-        _resultsView.Refresh();
+        if (_resultMode == ResultMode.GroupComparison)
+        {
+            _comparisonResultsView.Refresh();
+            StatusTextBlock.Text = $"{_comparisonResults.Count} Gruppen verglichen, {GetFilteredComparisonResults().Count} sichtbar.";
+        }
+        else
+        {
+            _resultsView.Refresh();
+            StatusTextBlock.Text = $"{_results.Count} Benutzer geladen, {GetFilteredResults().Count} sichtbar.";
+        }
+
         UpdateActionButtons();
-        StatusTextBlock.Text = $"{_results.Count} Benutzer geladen, {GetFilteredResults().Count} sichtbar.";
     }
 
     private bool FilterResult(object item)
@@ -490,8 +571,33 @@ public partial class MainWindow : Window
         return string.IsNullOrWhiteSpace(filter) || result.Contains(filter);
     }
 
+    private bool FilterComparisonResult(object item)
+    {
+        if (item is not GroupComparisonResult result)
+        {
+            return false;
+        }
+
+        var filter = FilterTextBox.Text.Trim();
+        return string.IsNullOrWhiteSpace(filter) || result.Contains(filter);
+    }
+
     private void CopyButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_resultMode == ResultMode.GroupComparison)
+        {
+            var filteredComparisonResults = GetFilteredComparisonResults();
+            if (filteredComparisonResults.Count == 0)
+            {
+                return;
+            }
+
+            var comparisonGroupNames = GetVisibleGroupNames(filteredComparisonResults);
+            Clipboard.SetText(string.Join(Environment.NewLine, comparisonGroupNames));
+            StatusTextBlock.Text = $"{comparisonGroupNames.Count} sichtbare GroupName-Werte in die Zwischenablage kopiert.";
+            return;
+        }
+
         var filteredResults = GetFilteredResults();
         if (filteredResults.Count == 0)
         {
@@ -505,30 +611,59 @@ public partial class MainWindow : Window
 
     private void ExportButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_resultMode == ResultMode.GroupComparison)
+        {
+            var filteredComparisonResults = GetFilteredComparisonResults();
+            if (filteredComparisonResults.Count == 0)
+            {
+                return;
+            }
+
+            var comparisonDialog = CreateCsvSaveFileDialog("ad-user-group-comparison");
+            if (comparisonDialog.ShowDialog(this) != true)
+            {
+                return;
+            }
+
+            File.WriteAllText(comparisonDialog.FileName, ToDelimitedText(GroupComparisonResult.Headers, filteredComparisonResults.Select(result => result.ToFields()), ";"), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            StatusTextBlock.Text = $"{filteredComparisonResults.Count} sichtbare Gruppen nach CSV exportiert.";
+            return;
+        }
+
         var filteredResults = GetFilteredResults();
         if (filteredResults.Count == 0)
         {
             return;
         }
 
-        var dialog = new SaveFileDialog
-        {
-            Filter = "CSV-Dateien (*.csv)|*.csv|Alle Dateien (*.*)|*.*",
-            FileName = $"ad-users-{DateTime.Now:yyyyMMdd-HHmm}.csv"
-        };
+        var dialog = CreateCsvSaveFileDialog("ad-users");
 
         if (dialog.ShowDialog(this) != true)
         {
             return;
         }
 
-        File.WriteAllText(dialog.FileName, ToDelimitedText(filteredResults, ";"), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        File.WriteAllText(dialog.FileName, ToDelimitedText(AdUserResult.Headers, filteredResults.Select(result => result.ToFields()), ";"), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
         StatusTextBlock.Text = $"{filteredResults.Count} sichtbare Benutzer nach CSV exportiert.";
+    }
+
+    private static SaveFileDialog CreateCsvSaveFileDialog(string filePrefix)
+    {
+        return new SaveFileDialog
+        {
+            Filter = "CSV-Dateien (*.csv)|*.csv|Alle Dateien (*.*)|*.*",
+            FileName = $"{filePrefix}-{DateTime.Now:yyyyMMdd-HHmm}.csv"
+        };
     }
 
     private List<AdUserResult> GetFilteredResults()
     {
         return _resultsView.Cast<AdUserResult>().ToList();
+    }
+
+    private List<GroupComparisonResult> GetFilteredComparisonResults()
+    {
+        return _comparisonResultsView.Cast<GroupComparisonResult>().ToList();
     }
 
     private static List<string> GetVisibleGroupNames(IEnumerable<AdUserResult> results)
@@ -541,14 +676,24 @@ public partial class MainWindow : Window
             .ToList();
     }
 
-    private static string ToDelimitedText(IReadOnlyCollection<AdUserResult> results, string delimiter)
+    private static List<string> GetVisibleGroupNames(IEnumerable<GroupComparisonResult> results)
+    {
+        return results
+            .Select(result => result.GroupName)
+            .Where(groupName => !string.IsNullOrWhiteSpace(groupName))
+            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .OrderBy(groupName => groupName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+    }
+
+    private static string ToDelimitedText(IEnumerable<string> headers, IEnumerable<string[]> rows, string delimiter)
     {
         var builder = new StringBuilder();
-        builder.AppendLine(string.Join(delimiter, AdUserResult.Headers.Select(value => Escape(value, delimiter))));
+        builder.AppendLine(string.Join(delimiter, headers.Select(value => Escape(value, delimiter))));
 
-        foreach (var result in results)
+        foreach (var row in rows)
         {
-            builder.AppendLine(string.Join(delimiter, result.ToFields().Select(value => Escape(value, delimiter))));
+            builder.AppendLine(string.Join(delimiter, row.Select(value => Escape(value, delimiter))));
         }
 
         return builder.ToString();
@@ -565,8 +710,10 @@ public partial class MainWindow : Window
     private void SetBusy(bool isBusy, string? status = null)
     {
         SearchButton.IsEnabled = !isBusy;
-        CopyButton.IsEnabled = !isBusy && GetFilteredResults().Count > 0;
-        ExportButton.IsEnabled = !isBusy && GetFilteredResults().Count > 0;
+        CompareUsersButton.IsEnabled = !isBusy;
+        var hasVisibleRows = HasVisibleRows();
+        CopyButton.IsEnabled = !isBusy && hasVisibleRows;
+        ExportButton.IsEnabled = !isBusy && hasVisibleRows;
         BusyProgress.Visibility = isBusy ? Visibility.Visible : Visibility.Collapsed;
         if (!string.IsNullOrWhiteSpace(status))
         {
@@ -576,9 +723,29 @@ public partial class MainWindow : Window
 
     private void UpdateActionButtons()
     {
-        var hasVisibleRows = GetFilteredResults().Count > 0;
+        var hasVisibleRows = HasVisibleRows();
         CopyButton.IsEnabled = hasVisibleRows;
         ExportButton.IsEnabled = hasVisibleRows;
+    }
+
+    private bool HasVisibleRows()
+    {
+        return _resultMode == ResultMode.GroupComparison
+            ? GetFilteredComparisonResults().Count > 0
+            : GetFilteredResults().Count > 0;
+    }
+
+    private void SetResultMode(ResultMode resultMode)
+    {
+        _resultMode = resultMode;
+        ResultsGrid.Visibility = resultMode == ResultMode.UserSearch ? Visibility.Visible : Visibility.Collapsed;
+        ComparisonGrid.Visibility = resultMode == ResultMode.GroupComparison ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private enum ResultMode
+    {
+        UserSearch,
+        GroupComparison
     }
 
     private sealed class AppSettings

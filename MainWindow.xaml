@@ -4,7 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="AD Group User Exporter" Height="760" Width="1320" MinHeight="640" MinWidth="1080"
+        Title="AD Group User Exporter" Height="820" Width="1320" MinHeight="720" MinWidth="1080"
         Background="{DynamicResource WindowBackgroundBrush}" Foreground="{DynamicResource TextBrush}">
     <Window.Resources>
         <Style TargetType="TextBlock">
@@ -71,6 +71,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -115,7 +116,32 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1" Margin="0,12,0,12">
+        <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" Background="{DynamicResource PanelBackgroundBrush}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,12,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="User 1" FontWeight="SemiBold" />
+                <TextBox Grid.Row="1" Grid.Column="0" x:Name="CompareUserATextBox" Margin="0,6,12,0" Height="30"
+                         ToolTip="SamAccountName, DistinguishedName oder andere ADUser-Identity" />
+
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="User 2" FontWeight="SemiBold" />
+                <TextBox Grid.Row="1" Grid.Column="1" x:Name="CompareUserBTextBox" Margin="0,6,12,0" Height="30"
+                         ToolTip="SamAccountName, DistinguishedName oder andere ADUser-Identity" />
+
+                <Button Grid.Row="1" Grid.Column="2" x:Name="CompareUsersButton" Content="User vergleichen" Width="150" Height="32" Margin="0,6,0,0"
+                        Click="CompareUsersButton_Click" />
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2" Margin="0,12,0,12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -130,23 +156,37 @@
                     Click="ExportButton_Click" IsEnabled="False" />
         </Grid>
 
-        <DataGrid Grid.Row="2" x:Name="ResultsGrid" AutoGenerateColumns="False" IsReadOnly="True"
-                  CanUserAddRows="False" CanUserDeleteRows="False" SelectionMode="Extended"
-                  GridLinesVisibility="Horizontal" HeadersVisibility="Column">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="GroupName" Binding="{Binding GroupName}" Width="190" />
-                <DataGridTextColumn Header="GroupPath" Binding="{Binding GroupPath}" Width="260" />
-                <DataGridTextColumn Header="SamAccountName" Binding="{Binding SamAccountName}" Width="150" />
-                <DataGridTextColumn Header="DisplayName" Binding="{Binding DisplayName}" Width="190" />
-                <DataGridTextColumn Header="Mail" Binding="{Binding Mail}" Width="230" />
-                <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding Enabled}" Width="80" />
-                <DataGridTextColumn Header="Department" Binding="{Binding Department}" Width="150" />
-                <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="180" />
-                <DataGridTextColumn Header="DistinguishedName" Binding="{Binding DistinguishedName}" Width="360" />
-            </DataGrid.Columns>
-        </DataGrid>
+        <Grid Grid.Row="3">
+            <DataGrid x:Name="ResultsGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                      CanUserAddRows="False" CanUserDeleteRows="False" SelectionMode="Extended"
+                      GridLinesVisibility="Horizontal" HeadersVisibility="Column">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="GroupName" Binding="{Binding GroupName}" Width="190" />
+                    <DataGridTextColumn Header="GroupPath" Binding="{Binding GroupPath}" Width="260" />
+                    <DataGridTextColumn Header="SamAccountName" Binding="{Binding SamAccountName}" Width="150" />
+                    <DataGridTextColumn Header="DisplayName" Binding="{Binding DisplayName}" Width="190" />
+                    <DataGridTextColumn Header="Mail" Binding="{Binding Mail}" Width="230" />
+                    <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding Enabled}" Width="80" />
+                    <DataGridTextColumn Header="Department" Binding="{Binding Department}" Width="150" />
+                    <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="180" />
+                    <DataGridTextColumn Header="DistinguishedName" Binding="{Binding DistinguishedName}" Width="360" />
+                </DataGrid.Columns>
+            </DataGrid>
 
-        <DockPanel Grid.Row="3" Margin="0,10,0,0">
+            <DataGrid x:Name="ComparisonGrid" AutoGenerateColumns="False" IsReadOnly="True" Visibility="Collapsed"
+                      CanUserAddRows="False" CanUserDeleteRows="False" SelectionMode="Extended"
+                      GridLinesVisibility="Horizontal" HeadersVisibility="Column">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="130" />
+                    <DataGridTextColumn Header="GroupName" Binding="{Binding GroupName}" Width="260" />
+                    <DataGridTextColumn Header="User 1" Binding="{Binding UserA}" Width="130" />
+                    <DataGridTextColumn Header="User 2" Binding="{Binding UserB}" Width="130" />
+                    <DataGridTextColumn Header="DistinguishedName" Binding="{Binding DistinguishedName}" Width="*" MinWidth="420" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Grid>
+
+        <DockPanel Grid.Row="4" Margin="0,10,0,0">
             <ProgressBar x:Name="BusyProgress" DockPanel.Dock="Left" Width="140" Height="16" IsIndeterminate="True" Visibility="Collapsed" Margin="0,0,12,0" />
             <TextBlock x:Name="StatusTextBlock" VerticalAlignment="Center" Text="Bereit" />
         </DockPanel>
