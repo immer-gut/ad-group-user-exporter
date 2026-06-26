@@ -129,12 +129,16 @@
                 </Grid.RowDefinitions>
 
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="User 1" FontWeight="SemiBold" />
-                <TextBox Grid.Row="1" Grid.Column="0" x:Name="CompareUserATextBox" Margin="0,6,12,0" Height="30"
-                         ToolTip="SamAccountName, DisplayName, Mail oder DistinguishedName aus der geladenen Liste" />
+                <ComboBox Grid.Row="1" Grid.Column="0" x:Name="CompareUserAComboBox" Margin="0,6,12,0" Height="30"
+                          IsEditable="True" IsTextSearchEnabled="False" StaysOpenOnEdit="True" MaxDropDownHeight="260"
+                          GotKeyboardFocus="CompareUserComboBox_GotKeyboardFocus" PreviewMouseLeftButtonDown="CompareUserComboBox_PreviewMouseLeftButtonDown"
+                          ToolTip="User aus der geladenen Liste auswaehlen oder per Teiltext suchen" />
 
                 <TextBlock Grid.Row="0" Grid.Column="1" Text="User 2" FontWeight="SemiBold" />
-                <TextBox Grid.Row="1" Grid.Column="1" x:Name="CompareUserBTextBox" Margin="0,6,12,0" Height="30"
-                         ToolTip="SamAccountName, DisplayName, Mail oder DistinguishedName aus der geladenen Liste" />
+                <ComboBox Grid.Row="1" Grid.Column="1" x:Name="CompareUserBComboBox" Margin="0,6,12,0" Height="30"
+                          IsEditable="True" IsTextSearchEnabled="False" StaysOpenOnEdit="True" MaxDropDownHeight="260"
+                          GotKeyboardFocus="CompareUserComboBox_GotKeyboardFocus" PreviewMouseLeftButtonDown="CompareUserComboBox_PreviewMouseLeftButtonDown"
+                          ToolTip="User aus der geladenen Liste auswaehlen oder per Teiltext suchen" />
 
                 <Button Grid.Row="1" Grid.Column="2" x:Name="CompareUsersButton" Content="User vergleichen" Width="150" Height="32" Margin="0,6,0,0"
                         Click="CompareUsersButton_Click" />

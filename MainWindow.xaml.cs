@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -30,6 +31,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<AdUserResult> _results = [];
     private readonly ObservableCollection<GroupComparisonResult> _comparisonResults = [];
     private readonly ObservableCollection<string> _groupPatterns = [];
+    private readonly ObservableCollection<CompareUserOption> _compareUserOptions = [];
     private readonly ICollectionView _resultsView;
     private readonly ICollectionView _comparisonResultsView;
 
@@ -38,6 +40,8 @@ public partial class MainWindow : Window
         InitializeComponent();
         Loaded += (_, _) => UpdateComboBoxColors();
         GroupPatternComboBox.ItemsSource = _groupPatterns;
+        CompareUserAComboBox.ItemsSource = _compareUserOptions;
+        CompareUserBComboBox.ItemsSource = _compareUserOptions;
         LoadPatternHistory();
         LoadThemeSetting();
         _resultsView = CollectionViewSource.GetDefaultView(_results);
@@ -73,6 +77,8 @@ public partial class MainWindow : Window
                 _results.Add(result);
             }
 
+            UpdateCompareUserOptions();
+            _comparisonResults.Clear();
             SetResultMode(ResultMode.UserSearch);
             _resultsView.Refresh();
             UpdateActionButtons();
@@ -91,8 +97,8 @@ public partial class MainWindow : Window
 
     private void CompareUsersButton_Click(object sender, RoutedEventArgs e)
     {
-        var userA = CompareUserATextBox.Text.Trim();
-        var userB = CompareUserBTextBox.Text.Trim();
+        var userA = CompareUserAComboBox.Text.Trim();
+        var userB = CompareUserBComboBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(userA) || string.IsNullOrWhiteSpace(userB))
         {
             MessageBox.Show(this, "Bitte beide Benutzer angeben.", "Eingabe fehlt", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -136,23 +142,15 @@ public partial class MainWindow : Window
 
     private List<GroupComparisonResult> BuildUserGroupComparison(string userA, string userB)
     {
-        var rowsA = _results.Where(result => MatchesUser(result, userA)).ToList();
-        var rowsB = _results.Where(result => MatchesUser(result, userB)).ToList();
-        if (rowsA.Count == 0 || rowsB.Count == 0)
+        var optionA = ResolveCompareUserOption(userA);
+        var optionB = ResolveCompareUserOption(userB);
+        if (string.Equals(optionA.Key, optionB.Key, StringComparison.CurrentCultureIgnoreCase))
         {
-            var missingUsers = new List<string>();
-            if (rowsA.Count == 0)
-            {
-                missingUsers.Add(userA);
-            }
-            if (rowsB.Count == 0)
-            {
-                missingUsers.Add(userB);
-            }
-
-            throw new InvalidOperationException($"Benutzer nicht in der geladenen Liste gefunden: {string.Join(", ", missingUsers)}.");
+            throw new InvalidOperationException("Bitte zwei unterschiedliche Benutzer auswaehlen.");
         }
 
+        var rowsA = _results.Where(result => CompareUserKeysEqual(GetUserKey(result), optionA.Key)).ToList();
+        var rowsB = _results.Where(result => CompareUserKeysEqual(GetUserKey(result), optionB.Key)).ToList();
         var allGroupNames = rowsA
             .Concat(rowsB)
             .Select(result => result.GroupName)
@@ -160,8 +158,8 @@ public partial class MainWindow : Window
             .Distinct(StringComparer.CurrentCultureIgnoreCase)
             .OrderBy(groupName => groupName, StringComparer.CurrentCultureIgnoreCase);
 
-        var userALabel = GetUserLabel(rowsA, userA);
-        var userBLabel = GetUserLabel(rowsB, userB);
+        var userALabel = optionA.SamAccountName;
+        var userBLabel = optionB.SamAccountName;
         var comparisonResults = new List<GroupComparisonResult>();
 
         foreach (var groupName in allGroupNames)
@@ -193,23 +191,92 @@ public partial class MainWindow : Window
             .ToList();
     }
 
-    private static bool MatchesUser(AdUserResult result, string user)
+    private CompareUserOption ResolveCompareUserOption(string input)
     {
-        return EqualsUserField(result.SamAccountName, user)
-            || EqualsUserField(result.DisplayName, user)
-            || EqualsUserField(result.Mail, user)
-            || EqualsUserField(result.DistinguishedName, user);
+        var exactMatch = _compareUserOptions.FirstOrDefault(option => option.IsExactMatch(input));
+        if (exactMatch is not null)
+        {
+            return exactMatch;
+        }
+
+        var matches = _compareUserOptions
+            .Where(option => option.Contains(input))
+            .Take(11)
+            .ToList();
+
+        return matches.Count switch
+        {
+            0 => throw new InvalidOperationException($"Benutzer nicht in der geladenen Liste gefunden: {input}."),
+            1 => matches[0],
+            _ => throw new InvalidOperationException(
+                $"Eingabe ist nicht eindeutig: {input}. Treffer: {string.Join(", ", matches.Take(10).Select(option => option.SamAccountName))}.")
+        };
     }
 
-    private static bool EqualsUserField(string value, string user)
+    private void UpdateCompareUserOptions()
     {
-        return !string.IsNullOrWhiteSpace(value)
-            && string.Equals(value.Trim(), user, StringComparison.CurrentCultureIgnoreCase);
+        var previousUserA = CompareUserAComboBox.Text.Trim();
+        var previousUserB = CompareUserBComboBox.Text.Trim();
+
+        var options = _results
+            .Where(result => !string.IsNullOrWhiteSpace(GetUserKey(result)))
+            .GroupBy(result => GetUserKey(result), StringComparer.CurrentCultureIgnoreCase)
+            .Select(group => CompareUserOption.FromResults(group.Key, group))
+            .OrderBy(option => option.SamAccountName, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(option => option.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        _compareUserOptions.Clear();
+        foreach (var option in options)
+        {
+            _compareUserOptions.Add(option);
+        }
+
+        CompareUserAComboBox.Text = PreserveCompareUserText(previousUserA, fallbackIndex: 0);
+        CompareUserBComboBox.Text = PreserveCompareUserText(previousUserB, fallbackIndex: 1);
     }
 
-    private static string GetUserLabel(IReadOnlyList<AdUserResult> rows, string fallback)
+    private string PreserveCompareUserText(string previousText, int fallbackIndex)
     {
-        return rows.Select(result => result.SamAccountName).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? fallback;
+        if (string.IsNullOrWhiteSpace(previousText))
+        {
+            return _compareUserOptions.Count > fallbackIndex ? _compareUserOptions[fallbackIndex].Label : string.Empty;
+        }
+
+        var exactMatch = _compareUserOptions.FirstOrDefault(option => option.IsExactMatch(previousText));
+        return exactMatch?.Label ?? previousText;
+    }
+
+    private void CompareUserComboBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        OpenCompareUserDropDown(sender);
+    }
+
+    private void CompareUserComboBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        OpenCompareUserDropDown(sender);
+    }
+
+    private void OpenCompareUserDropDown(object sender)
+    {
+        if (sender is not System.Windows.Controls.ComboBox comboBox || comboBox.Items.Count == 0)
+        {
+            return;
+        }
+
+        comboBox.IsDropDownOpen = true;
+    }
+
+    private static string GetUserKey(AdUserResult result)
+    {
+        return !string.IsNullOrWhiteSpace(result.DistinguishedName)
+            ? result.DistinguishedName.Trim()
+            : result.SamAccountName.Trim();
+    }
+
+    private static bool CompareUserKeysEqual(string keyA, string keyB)
+    {
+        return string.Equals(keyA, keyB, StringComparison.CurrentCultureIgnoreCase);
     }
 
     private static string JoinGroupPaths(IEnumerable<AdUserResult> rows)
@@ -466,6 +533,8 @@ public partial class MainWindow : Window
         {
             ApplyComboBoxColors(GroupPatternComboBox);
             ApplyComboBoxColors(ThemeComboBox);
+            ApplyComboBoxColors(CompareUserAComboBox);
+            ApplyComboBoxColors(CompareUserBComboBox);
         }, DispatcherPriority.Loaded);
     }
 
@@ -827,5 +896,82 @@ public partial class MainWindow : Window
     private sealed class AppSettings
     {
         public string Theme { get; set; } = "Light";
+    }
+
+    private sealed class CompareUserOption
+    {
+        public string Key { get; private init; } = string.Empty;
+        public string SamAccountName { get; private init; } = string.Empty;
+        public string DisplayName { get; private init; } = string.Empty;
+        public string Mail { get; private init; } = string.Empty;
+        public string DistinguishedName { get; private init; } = string.Empty;
+        public string Label { get; private init; } = string.Empty;
+
+        public static CompareUserOption FromResults(string key, IEnumerable<AdUserResult> results)
+        {
+            var rows = results.ToList();
+            var samAccountName = FirstNonEmpty(rows.Select(result => result.SamAccountName));
+            var displayName = FirstNonEmpty(rows.Select(result => result.DisplayName));
+            var mail = FirstNonEmpty(rows.Select(result => result.Mail));
+            var distinguishedName = FirstNonEmpty(rows.Select(result => result.DistinguishedName));
+            var labelParts = new[]
+            {
+                samAccountName,
+                displayName,
+                mail
+            }.Where(value => !string.IsNullOrWhiteSpace(value));
+
+            var label = string.Join(" | ", labelParts);
+
+            return new CompareUserOption
+            {
+                Key = key,
+                SamAccountName = string.IsNullOrWhiteSpace(samAccountName) ? key : samAccountName,
+                DisplayName = displayName,
+                Mail = mail,
+                DistinguishedName = distinguishedName,
+                Label = string.IsNullOrWhiteSpace(label) ? key : label
+            };
+        }
+
+        public bool IsExactMatch(string input)
+        {
+            return EqualsField(Label, input)
+                || EqualsField(SamAccountName, input)
+                || EqualsField(DisplayName, input)
+                || EqualsField(Mail, input)
+                || EqualsField(DistinguishedName, input);
+        }
+
+        public bool Contains(string input)
+        {
+            return ContainsField(Label, input)
+                || ContainsField(SamAccountName, input)
+                || ContainsField(DisplayName, input)
+                || ContainsField(Mail, input)
+                || ContainsField(DistinguishedName, input);
+        }
+
+        public override string ToString()
+        {
+            return Label;
+        }
+
+        private static string FirstNonEmpty(IEnumerable<string> values)
+        {
+            return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
+        }
+
+        private static bool EqualsField(string value, string input)
+        {
+            return !string.IsNullOrWhiteSpace(value)
+                && string.Equals(value.Trim(), input.Trim(), StringComparison.CurrentCultureIgnoreCase);
+        }
+
+        private static bool ContainsField(string value, string input)
+        {
+            return !string.IsNullOrWhiteSpace(value)
+                && value.Contains(input.Trim(), StringComparison.CurrentCultureIgnoreCase);
+        }
     }
 }
