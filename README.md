@@ -30,6 +30,20 @@ RSAT Active Directory Tools installieren:
 Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0
 ```
 
+## Download
+
+Die fertige Windows-Version liegt nicht im Git-Repository, sondern als GitHub Release Asset:
+
+```text
+https://github.com/immer-gut/ad-group-user-exporter/releases/latest
+```
+
+Direkter Download der aktuellen ZIP:
+
+```text
+https://github.com/immer-gut/ad-group-user-exporter/releases/download/v0.2.0/AdGroupUserExporter-win-x64.zip
+```
+
 ## Start in Visual Studio
 
 1. Repository klonen.
@@ -91,7 +105,7 @@ dotnet build
 Release-Build:
 
 ```powershell
-dotnet publish -c Release -r win-x64 --self-contained false
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish\win-x64
 ```
 
 ## Ergebnis-Spalten
