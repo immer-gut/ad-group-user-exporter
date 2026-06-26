@@ -41,7 +41,7 @@ https://github.com/immer-gut/ad-group-user-exporter/releases/latest
 Direkter Download der aktuellen ZIP:
 
 ```text
-https://github.com/immer-gut/ad-group-user-exporter/releases/download/v0.2.2/AdGroupUserExporter-win-x64.zip
+https://github.com/immer-gut/ad-group-user-exporter/releases/download/v0.2.3/AdGroupUserExporter-win-x64.zip
 ```
 
 ## Start in Visual Studio

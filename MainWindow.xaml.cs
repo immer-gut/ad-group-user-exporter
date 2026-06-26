@@ -148,6 +148,15 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ClearComparisonButton_Click(object sender, RoutedEventArgs e)
+    {
+        _comparisonResults.Clear();
+        SetResultMode(ResultMode.UserSearch);
+        _resultsView.Refresh();
+        UpdateActionButtons();
+        StatusTextBlock.Text = $"{_results.Count} Benutzer geladen, {GetFilteredResults().Count} sichtbar.";
+    }
+
     private List<GroupComparisonResult> BuildUserGroupComparison(string userA, string userB)
     {
         var optionA = ResolveCompareUserOption(userA);
@@ -896,6 +905,7 @@ public partial class MainWindow : Window
     {
         SearchButton.IsEnabled = !isBusy;
         CompareUsersButton.IsEnabled = !isBusy;
+        ClearComparisonButton.IsEnabled = !isBusy && _resultMode == ResultMode.GroupComparison;
         var hasVisibleRows = HasVisibleRows();
         CopyButton.IsEnabled = !isBusy && hasVisibleRows;
         ExportButton.IsEnabled = !isBusy && hasVisibleRows;
@@ -911,6 +921,7 @@ public partial class MainWindow : Window
         var hasVisibleRows = HasVisibleRows();
         CopyButton.IsEnabled = hasVisibleRows;
         ExportButton.IsEnabled = hasVisibleRows;
+        ClearComparisonButton.IsEnabled = _resultMode == ResultMode.GroupComparison;
     }
 
     private bool HasVisibleRows()
@@ -925,6 +936,7 @@ public partial class MainWindow : Window
         _resultMode = resultMode;
         ResultsGrid.Visibility = resultMode == ResultMode.UserSearch ? Visibility.Visible : Visibility.Collapsed;
         ComparisonGrid.Visibility = resultMode == ResultMode.GroupComparison ? Visibility.Visible : Visibility.Collapsed;
+        ClearComparisonButton.IsEnabled = resultMode == ResultMode.GroupComparison;
     }
 
     private enum ResultMode
