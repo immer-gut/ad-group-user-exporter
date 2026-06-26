@@ -8,14 +8,16 @@ public sealed class GroupComparisonResult
         nameof(GroupName),
         nameof(UserA),
         nameof(UserB),
-        nameof(DistinguishedName)
+        nameof(GroupPathA),
+        nameof(GroupPathB)
     ];
 
     public string Status { get; set; } = string.Empty;
     public string GroupName { get; set; } = string.Empty;
     public string UserA { get; set; } = string.Empty;
     public string UserB { get; set; } = string.Empty;
-    public string DistinguishedName { get; set; } = string.Empty;
+    public string GroupPathA { get; set; } = string.Empty;
+    public string GroupPathB { get; set; } = string.Empty;
 
     public string[] ToFields()
     {
@@ -25,7 +27,8 @@ public sealed class GroupComparisonResult
             GroupName,
             UserA,
             UserB,
-            DistinguishedName
+            GroupPathA,
+            GroupPathB
         ];
     }
 

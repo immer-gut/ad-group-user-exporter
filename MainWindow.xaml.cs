@@ -89,7 +89,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void CompareUsersButton_Click(object sender, RoutedEventArgs e)
+    private void CompareUsersButton_Click(object sender, RoutedEventArgs e)
     {
         var userA = CompareUserATextBox.Text.Trim();
         var userB = CompareUserBTextBox.Text.Trim();
@@ -99,14 +99,17 @@ public partial class MainWindow : Window
             return;
         }
 
-        var searchBase = SearchBaseTextBox.Text.Trim();
-        var server = ServerTextBox.Text.Trim();
+        if (_results.Count == 0)
+        {
+            MessageBox.Show(this, "Bitte zuerst Gruppen ueber das Gruppenmuster laden.", "Keine Daten geladen", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
 
         SetBusy(true, "User-Gruppen werden verglichen...");
 
         try
         {
-            var results = await Task.Run(() => RunPowerShellGroupComparison(userA, userB, searchBase, server));
+            var results = BuildUserGroupComparison(userA, userB);
             _comparisonResults.Clear();
             foreach (var result in results)
             {
@@ -129,6 +132,93 @@ public partial class MainWindow : Window
         {
             SetBusy(false);
         }
+    }
+
+    private List<GroupComparisonResult> BuildUserGroupComparison(string userA, string userB)
+    {
+        var rowsA = _results.Where(result => MatchesUser(result, userA)).ToList();
+        var rowsB = _results.Where(result => MatchesUser(result, userB)).ToList();
+        if (rowsA.Count == 0 || rowsB.Count == 0)
+        {
+            var missingUsers = new List<string>();
+            if (rowsA.Count == 0)
+            {
+                missingUsers.Add(userA);
+            }
+            if (rowsB.Count == 0)
+            {
+                missingUsers.Add(userB);
+            }
+
+            throw new InvalidOperationException($"Benutzer nicht in der geladenen Liste gefunden: {string.Join(", ", missingUsers)}.");
+        }
+
+        var allGroupNames = rowsA
+            .Concat(rowsB)
+            .Select(result => result.GroupName)
+            .Where(groupName => !string.IsNullOrWhiteSpace(groupName))
+            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .OrderBy(groupName => groupName, StringComparer.CurrentCultureIgnoreCase);
+
+        var userALabel = GetUserLabel(rowsA, userA);
+        var userBLabel = GetUserLabel(rowsB, userB);
+        var comparisonResults = new List<GroupComparisonResult>();
+
+        foreach (var groupName in allGroupNames)
+        {
+            var groupRowsA = rowsA
+                .Where(result => string.Equals(result.GroupName, groupName, StringComparison.CurrentCultureIgnoreCase))
+                .ToList();
+            var groupRowsB = rowsB
+                .Where(result => string.Equals(result.GroupName, groupName, StringComparison.CurrentCultureIgnoreCase))
+                .ToList();
+            var inA = groupRowsA.Count > 0;
+            var inB = groupRowsB.Count > 0;
+            var status = inA && inB ? "Beide" : inA ? $"Nur {userALabel}" : $"Nur {userBLabel}";
+
+            comparisonResults.Add(new GroupComparisonResult
+            {
+                Status = status,
+                GroupName = groupName,
+                UserA = inA ? "Ja" : "Nein",
+                UserB = inB ? "Ja" : "Nein",
+                GroupPathA = JoinGroupPaths(groupRowsA),
+                GroupPathB = JoinGroupPaths(groupRowsB)
+            });
+        }
+
+        return comparisonResults
+            .OrderBy(result => result.Status, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(result => result.GroupName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+    }
+
+    private static bool MatchesUser(AdUserResult result, string user)
+    {
+        return EqualsUserField(result.SamAccountName, user)
+            || EqualsUserField(result.DisplayName, user)
+            || EqualsUserField(result.Mail, user)
+            || EqualsUserField(result.DistinguishedName, user);
+    }
+
+    private static bool EqualsUserField(string value, string user)
+    {
+        return !string.IsNullOrWhiteSpace(value)
+            && string.Equals(value.Trim(), user, StringComparison.CurrentCultureIgnoreCase);
+    }
+
+    private static string GetUserLabel(IReadOnlyList<AdUserResult> rows, string fallback)
+    {
+        return rows.Select(result => result.SamAccountName).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? fallback;
+    }
+
+    private static string JoinGroupPaths(IEnumerable<AdUserResult> rows)
+    {
+        return string.Join(" | ", rows
+            .Select(result => result.GroupPath)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .OrderBy(path => path, StringComparer.CurrentCultureIgnoreCase));
     }
 
     private string GetCurrentGroupPattern()
@@ -462,20 +552,6 @@ public partial class MainWindow : Window
             {
                 startInfo.ArgumentList.Add("-OnlyEnabled");
             }
-        }) ?? [];
-    }
-
-    private List<GroupComparisonResult> RunPowerShellGroupComparison(string userA, string userB, string searchBase, string server)
-    {
-        return RunPowerShell<List<GroupComparisonResult>>(startInfo =>
-        {
-            startInfo.ArgumentList.Add("-CompareUserA");
-            startInfo.ArgumentList.Add(userA);
-            startInfo.ArgumentList.Add("-CompareUserB");
-            startInfo.ArgumentList.Add(userB);
-
-            AddOptionalArgument(startInfo, "-SearchBase", searchBase);
-            AddOptionalArgument(startInfo, "-Server", server);
         }) ?? [];
     }
 
