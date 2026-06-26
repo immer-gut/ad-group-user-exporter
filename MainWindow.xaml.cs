@@ -34,14 +34,22 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<CompareUserOption> _compareUserOptions = [];
     private readonly ICollectionView _resultsView;
     private readonly ICollectionView _comparisonResultsView;
+    private readonly ICollectionView _compareUserOptionsViewA;
+    private readonly ICollectionView _compareUserOptionsViewB;
 
     public MainWindow()
     {
         InitializeComponent();
         Loaded += (_, _) => UpdateComboBoxColors();
         GroupPatternComboBox.ItemsSource = _groupPatterns;
-        CompareUserAComboBox.ItemsSource = _compareUserOptions;
-        CompareUserBComboBox.ItemsSource = _compareUserOptions;
+        _compareUserOptionsViewA = new CollectionViewSource { Source = _compareUserOptions }.View;
+        _compareUserOptionsViewB = new CollectionViewSource { Source = _compareUserOptions }.View;
+        _compareUserOptionsViewA.Filter = FilterCompareUserOptionA;
+        _compareUserOptionsViewB.Filter = FilterCompareUserOptionB;
+        CompareUserAComboBox.ItemsSource = _compareUserOptionsViewA;
+        CompareUserBComboBox.ItemsSource = _compareUserOptionsViewB;
+        CompareUserAComboBox.AddHandler(System.Windows.Controls.Primitives.TextBoxBase.TextChangedEvent, new System.Windows.Controls.TextChangedEventHandler(CompareUserComboBox_TextChanged));
+        CompareUserBComboBox.AddHandler(System.Windows.Controls.Primitives.TextBoxBase.TextChangedEvent, new System.Windows.Controls.TextChangedEventHandler(CompareUserComboBox_TextChanged));
         LoadPatternHistory();
         LoadThemeSetting();
         _resultsView = CollectionViewSource.GetDefaultView(_results);
@@ -232,19 +240,51 @@ public partial class MainWindow : Window
             _compareUserOptions.Add(option);
         }
 
-        CompareUserAComboBox.Text = PreserveCompareUserText(previousUserA, fallbackIndex: 0);
-        CompareUserBComboBox.Text = PreserveCompareUserText(previousUserB, fallbackIndex: 1);
+        CompareUserAComboBox.Text = PreserveCompareUserText(previousUserA);
+        CompareUserBComboBox.Text = PreserveCompareUserText(previousUserB);
+        _compareUserOptionsViewA.Refresh();
+        _compareUserOptionsViewB.Refresh();
     }
 
-    private string PreserveCompareUserText(string previousText, int fallbackIndex)
+    private string PreserveCompareUserText(string previousText)
     {
         if (string.IsNullOrWhiteSpace(previousText))
         {
-            return _compareUserOptions.Count > fallbackIndex ? _compareUserOptions[fallbackIndex].Label : string.Empty;
+            return string.Empty;
         }
 
         var exactMatch = _compareUserOptions.FirstOrDefault(option => option.IsExactMatch(previousText));
         return exactMatch?.Label ?? previousText;
+    }
+
+    private bool FilterCompareUserOptionA(object item)
+    {
+        return FilterCompareUserOption(item, CompareUserAComboBox.Text);
+    }
+
+    private bool FilterCompareUserOptionB(object item)
+    {
+        return FilterCompareUserOption(item, CompareUserBComboBox.Text);
+    }
+
+    private static bool FilterCompareUserOption(object item, string filter)
+    {
+        return item is CompareUserOption option
+            && (string.IsNullOrWhiteSpace(filter) || option.Contains(filter));
+    }
+
+    private void CompareUserComboBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        if (sender == CompareUserAComboBox)
+        {
+            _compareUserOptionsViewA.Refresh();
+        }
+        else if (sender == CompareUserBComboBox)
+        {
+            _compareUserOptionsViewB.Refresh();
+        }
+
+        OpenCompareUserDropDown(sender);
     }
 
     private void CompareUserComboBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)

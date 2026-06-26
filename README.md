@@ -41,7 +41,7 @@ https://github.com/immer-gut/ad-group-user-exporter/releases/latest
 Direkter Download der aktuellen ZIP:
 
 ```text
-https://github.com/immer-gut/ad-group-user-exporter/releases/download/v0.2.1/AdGroupUserExporter-win-x64.zip
+https://github.com/immer-gut/ad-group-user-exporter/releases/download/v0.2.2/AdGroupUserExporter-win-x64.zip
 ```
 
 ## Start in Visual Studio
@@ -65,7 +65,7 @@ dotnet run --project .\AdGroupUserExporter.csproj
 5. `Suchen` klicken.
 6. Ergebnis ueber das Filterfeld einschraenken.
 7. Sichtbare `GroupName`-Werte kopieren oder das sichtbare Ergebnis als CSV exportieren.
-8. Fuer einen Gruppenvergleich zuerst das Gruppenmuster laden, dann zwei Benutzer aus den Auswahllisten `User 1` und `User 2` waehlen oder per Teiltext suchen und `User vergleichen` klicken.
+8. Fuer einen Gruppenvergleich zuerst das Gruppenmuster laden, dann zwei Benutzer aus den Auswahllisten `User 1` und `User 2` waehlen. Tippen filtert die Auswahllisten per Teiltext. Danach `User vergleichen` klicken.
 
 Der Gruppenmuster-Verlauf wird unter `%AppData%\AdGroupUserExporter\group-pattern-history.json` gespeichert. Der Button `Eintrag entfernen` entfernt das aktuell ausgewaehlte oder eingetragene Muster aus dem Verlauf. Ja, auch Verlaufslisten brauchen irgendwann eine Muellabfuhr.
 
