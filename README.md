@@ -2,6 +2,11 @@
 
 Kleine Windows-App zum Auslesen von AD-Benutzern aus Gruppen, deren Name einem Muster entspricht. Die GUI ist in C# / WPF gebaut, die AD-Abfrage laeuft ueber ein separates PowerShell-Script. Ja, zwei Welten, aber diesmal ausnahmsweise mit Absicht.
 
+## Dokumentation
+
+- [Project Notes](docs/PROJECT_NOTES.md)
+- [Architecture](docs/ARCHITECTURE.md)
+
 ## Funktionen
 
 - Gruppenmuster frei setzen, z. B. `abc*_1a*`
